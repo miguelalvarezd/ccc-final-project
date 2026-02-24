@@ -1,0 +1,20 @@
+{
+  "Records": [
+    {
+      "messageId": "19dd0b57-b21e-4ac1-bd88-01eea0640001",
+      "receiptHandle": "MessageReceiptHandle",
+      "body": "{\"device_id\": \"pi-zone-A\", \"sensor_id\": \"spot-04\", \"is_occupied\": true, \"occupancy_type\": \"infrared\", \"timestamp\": \"2026-02-23T18:37:00Z\"}",
+      "attributes": {
+        "ApproximateReceiveCount": "1",
+        "SentTimestamp": "1740332220000",
+        "SenderId": "AIDAIT2UOQQY3AUEKVGXU",
+        "ApproximateFirstReceiveTimestamp": "1740332220010"
+      },
+      "messageAttributes": {},
+      "md5OfBody": "7b270e59b47ff90a553787216d55d91d",
+      "eventSource": "aws:sqs",
+      "eventSourceARN": "arn:aws:sqs:us-east-1:123456789012:IoT-Queue",
+      "awsRegion": "us-east-1"
+    }
+  ]
+}
