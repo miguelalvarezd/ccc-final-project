@@ -2,8 +2,184 @@
   "Records": [
     {
       "messageId": "19dd0b57-b21e-4ac1-bd88-01eea0640001",
-      "receiptHandle": "MessageReceiptHandle",
-      "body": "{\"device_id\": \"pi-zone-A\", \"sensor_id\": \"spot-04\", \"is_occupied\": true, \"occupancy_type\": \"infrared\", \"timestamp\": \"2026-02-23T18:37:00Z\"}",
+      "receiptHandle": "MessageReceiptHandle01",
+      "body": "{\"device_id\": \"pi-zone-A\", \"sensor_id\": \"spot-01\", \"is_occupied\": true, \"occupancy_type\": \"infrared\", \"timestamp\": \"2026-02-23T18:37:00Z\"}",
+      "attributes": {
+        "ApproximateReceiveCount": "1",
+        "SentTimestamp": "1740332220000",
+        "SenderId": "AIDAIT2UOQQY3AUEKVGXU",
+        "ApproximateFirstReceiveTimestamp": "1740332220010"
+      },
+      "messageAttributes": {},
+      "md5OfBody": "7b270e59b47ff90a553787216d55d91d",
+      "eventSource": "aws:sqs",
+      "eventSourceARN": "arn:aws:sqs:us-east-1:123456789012:IoT-Queue",
+      "awsRegion": "us-east-1"
+    },
+    {
+      "messageId": "19dd0b57-b21e-4ac1-bd88-01eea0640002",
+      "receiptHandle": "MessageReceiptHandle02",
+      "body": "{\"device_id\": \"pi-zone-A\", \"sensor_id\": \"spot-02\", \"is_occupied\": false, \"occupancy_type\": \"infrared\", \"timestamp\": \"2026-02-23T18:37:00Z\"}",
+      "attributes": {
+        "ApproximateReceiveCount": "1",
+        "SentTimestamp": "1740332220000",
+        "SenderId": "AIDAIT2UOQQY3AUEKVGXU",
+        "ApproximateFirstReceiveTimestamp": "1740332220010"
+      },
+      "messageAttributes": {},
+      "md5OfBody": "7b270e59b47ff90a553787216d55d91d",
+      "eventSource": "aws:sqs",
+      "eventSourceARN": "arn:aws:sqs:us-east-1:123456789012:IoT-Queue",
+      "awsRegion": "us-east-1"
+    },
+    {
+      "messageId": "19dd0b57-b21e-4ac1-bd88-01eea0640003",
+      "receiptHandle": "MessageReceiptHandle03",
+      "body": "{\"device_id\": \"pi-zone-A\", \"sensor_id\": \"spot-03\", \"is_occupied\": true, \"occupancy_type\": \"infrared\", \"timestamp\": \"2026-02-23T18:37:00Z\"}",
+      "attributes": {
+        "ApproximateReceiveCount": "1",
+        "SentTimestamp": "1740332220000",
+        "SenderId": "AIDAIT2UOQQY3AUEKVGXU",
+        "ApproximateFirstReceiveTimestamp": "1740332220010"
+      },
+      "messageAttributes": {},
+      "md5OfBody": "7b270e59b47ff90a553787216d55d91d",
+      "eventSource": "aws:sqs",
+      "eventSourceARN": "arn:aws:sqs:us-east-1:123456789012:IoT-Queue",
+      "awsRegion": "us-east-1"
+    },
+    {
+      "messageId": "19dd0b57-b21e-4ac1-bd88-01eea0640004",
+      "receiptHandle": "MessageReceiptHandle04",
+      "body": "{\"device_id\": \"pi-zone-A\", \"sensor_id\": \"spot-04\", \"is_occupied\": false, \"occupancy_type\": \"infrared\", \"timestamp\": \"2026-02-23T18:37:00Z\"}",
+      "attributes": {
+        "ApproximateReceiveCount": "1",
+        "SentTimestamp": "1740332220000",
+        "SenderId": "AIDAIT2UOQQY3AUEKVGXU",
+        "ApproximateFirstReceiveTimestamp": "1740332220010"
+      },
+      "messageAttributes": {},
+      "md5OfBody": "7b270e59b47ff90a553787216d55d91d",
+      "eventSource": "aws:sqs",
+      "eventSourceARN": "arn:aws:sqs:us-east-1:123456789012:IoT-Queue",
+      "awsRegion": "us-east-1"
+    },
+    {
+      "messageId": "19dd0b57-b21e-4ac1-bd88-01eea0640005",
+      "receiptHandle": "MessageReceiptHandle05",
+      "body": "{\"device_id\": \"pi-zone-A\", \"sensor_id\": \"spot-05\", \"is_occupied\": true, \"occupancy_type\": \"infrared\", \"timestamp\": \"2026-02-23T18:37:00Z\"}",
+      "attributes": {
+        "ApproximateReceiveCount": "1",
+        "SentTimestamp": "1740332220000",
+        "SenderId": "AIDAIT2UOQQY3AUEKVGXU",
+        "ApproximateFirstReceiveTimestamp": "1740332220010"
+      },
+      "messageAttributes": {},
+      "md5OfBody": "7b270e59b47ff90a553787216d55d91d",
+      "eventSource": "aws:sqs",
+      "eventSourceARN": "arn:aws:sqs:us-east-1:123456789012:IoT-Queue",
+      "awsRegion": "us-east-1"
+    },
+    {
+      "messageId": "19dd0b57-b21e-4ac1-bd88-01eea0640006",
+      "receiptHandle": "MessageReceiptHandle06",
+      "body": "{\"device_id\": \"pi-zone-A\", \"sensor_id\": \"spot-06\", \"is_occupied\": false, \"occupancy_type\": \"infrared\", \"timestamp\": \"2026-02-23T18:37:00Z\"}",
+      "attributes": {
+        "ApproximateReceiveCount": "1",
+        "SentTimestamp": "1740332220000",
+        "SenderId": "AIDAIT2UOQQY3AUEKVGXU",
+        "ApproximateFirstReceiveTimestamp": "1740332220010"
+      },
+      "messageAttributes": {},
+      "md5OfBody": "7b270e59b47ff90a553787216d55d91d",
+      "eventSource": "aws:sqs",
+      "eventSourceARN": "arn:aws:sqs:us-east-1:123456789012:IoT-Queue",
+      "awsRegion": "us-east-1"
+    },
+    {
+      "messageId": "19dd0b57-b21e-4ac1-bd88-01eea0640007",
+      "receiptHandle": "MessageReceiptHandle07",
+      "body": "{\"device_id\": \"pi-zone-A\", \"sensor_id\": \"spot-07\", \"is_occupied\": true, \"occupancy_type\": \"infrared\", \"timestamp\": \"2026-02-23T18:37:00Z\"}",
+      "attributes": {
+        "ApproximateReceiveCount": "1",
+        "SentTimestamp": "1740332220000",
+        "SenderId": "AIDAIT2UOQQY3AUEKVGXU",
+        "ApproximateFirstReceiveTimestamp": "1740332220010"
+      },
+      "messageAttributes": {},
+      "md5OfBody": "7b270e59b47ff90a553787216d55d91d",
+      "eventSource": "aws:sqs",
+      "eventSourceARN": "arn:aws:sqs:us-east-1:123456789012:IoT-Queue",
+      "awsRegion": "us-east-1"
+    },
+    {
+      "messageId": "19dd0b57-b21e-4ac1-bd88-01eea0640008",
+      "receiptHandle": "MessageReceiptHandle08",
+      "body": "{\"device_id\": \"pi-zone-A\", \"sensor_id\": \"spot-08\", \"is_occupied\": false, \"occupancy_type\": \"infrared\", \"timestamp\": \"2026-02-23T18:37:00Z\"}",
+      "attributes": {
+        "ApproximateReceiveCount": "1",
+        "SentTimestamp": "1740332220000",
+        "SenderId": "AIDAIT2UOQQY3AUEKVGXU",
+        "ApproximateFirstReceiveTimestamp": "1740332220010"
+      },
+      "messageAttributes": {},
+      "md5OfBody": "7b270e59b47ff90a553787216d55d91d",
+      "eventSource": "aws:sqs",
+      "eventSourceARN": "arn:aws:sqs:us-east-1:123456789012:IoT-Queue",
+      "awsRegion": "us-east-1"
+    },
+    {
+      "messageId": "19dd0b57-b21e-4ac1-bd88-01eea0640009",
+      "receiptHandle": "MessageReceiptHandle09",
+      "body": "{\"device_id\": \"pi-zone-A\", \"sensor_id\": \"spot-09\", \"is_occupied\": true, \"occupancy_type\": \"infrared\", \"timestamp\": \"2026-02-23T18:37:00Z\"}",
+      "attributes": {
+        "ApproximateReceiveCount": "1",
+        "SentTimestamp": "1740332220000",
+        "SenderId": "AIDAIT2UOQQY3AUEKVGXU",
+        "ApproximateFirstReceiveTimestamp": "1740332220010"
+      },
+      "messageAttributes": {},
+      "md5OfBody": "7b270e59b47ff90a553787216d55d91d",
+      "eventSource": "aws:sqs",
+      "eventSourceARN": "arn:aws:sqs:us-east-1:123456789012:IoT-Queue",
+      "awsRegion": "us-east-1"
+    },
+    {
+      "messageId": "19dd0b57-b21e-4ac1-bd88-01eea0640010",
+      "receiptHandle": "MessageReceiptHandle10",
+      "body": "{\"device_id\": \"pi-zone-A\", \"sensor_id\": \"spot-10\", \"is_occupied\": false, \"occupancy_type\": \"infrared\", \"timestamp\": \"2026-02-23T18:37:00Z\"}",
+      "attributes": {
+        "ApproximateReceiveCount": "1",
+        "SentTimestamp": "1740332220000",
+        "SenderId": "AIDAIT2UOQQY3AUEKVGXU",
+        "ApproximateFirstReceiveTimestamp": "1740332220010"
+      },
+      "messageAttributes": {},
+      "md5OfBody": "7b270e59b47ff90a553787216d55d91d",
+      "eventSource": "aws:sqs",
+      "eventSourceARN": "arn:aws:sqs:us-east-1:123456789012:IoT-Queue",
+      "awsRegion": "us-east-1"
+    },
+    {
+      "messageId": "19dd0b57-b21e-4ac1-bd88-01eea0640011",
+      "receiptHandle": "MessageReceiptHandle11",
+      "body": "{\"device_id\": \"pi-zone-A\", \"sensor_id\": \"spot-11\", \"is_occupied\": true, \"occupancy_type\": \"infrared\", \"timestamp\": \"2026-02-23T18:37:00Z\"}",
+      "attributes": {
+        "ApproximateReceiveCount": "1",
+        "SentTimestamp": "1740332220000",
+        "SenderId": "AIDAIT2UOQQY3AUEKVGXU",
+        "ApproximateFirstReceiveTimestamp": "1740332220010"
+      },
+      "messageAttributes": {},
+      "md5OfBody": "7b270e59b47ff90a553787216d55d91d",
+      "eventSource": "aws:sqs",
+      "eventSourceARN": "arn:aws:sqs:us-east-1:123456789012:IoT-Queue",
+      "awsRegion": "us-east-1"
+    },
+    {
+      "messageId": "19dd0b57-b21e-4ac1-bd88-01eea0640012",
+      "receiptHandle": "MessageReceiptHandle12",
+      "body": "{\"device_id\": \"pi-zone-A\", \"sensor_id\": \"spot-12\", \"is_occupied\": false, \"occupancy_type\": \"infrared\", \"timestamp\": \"2026-02-23T18:37:00Z\"}",
       "attributes": {
         "ApproximateReceiveCount": "1",
         "SentTimestamp": "1740332220000",
