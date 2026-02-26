@@ -11,7 +11,7 @@
 
 **2. Configure the Network Layout**
 
-* **Name tag auto-generation:** Type `parking-iot`. (AWS will automatically prefix all your subnets, route tables, and gateways with this name!).
+* **Name tag auto-generation:** Type `parking-ccc-iot-2026`. (AWS will automatically prefix all your subnets, route tables, and gateways with this name!).
 * **IPv4 CIDR block:** `10.0.0.0/16` (Leave as default).
 * **Number of Availability Zones (AZs):** Select **2**.
 * **Number of public subnets:** Select **2**.
@@ -19,7 +19,7 @@
 
 **3. Add the Gateways and Endpoints**
 
-* **NAT gateways ($):** Select **In 1 AZ**.
+* **NAT gateways ($):** Select **Zonal** and **In 1 AZ**.
 * *What this does automatically:* AWS will create the NAT Gateway, put it in your public subnet, allocate an Elastic IP, and automatically configure your private route table to point to it so your Lambdas can reach the internet.
 
 
@@ -37,7 +37,39 @@
 
 ---
 
-When you attach your Lambdas to this VPC later, you will just select the `parking-iot-vpc` and the `parking-iot-private-subnet-1` and `parking-iot-private-subnet-2`, and everything will work perfectly out of the box.
+When you attach your Lambdas to this VPC later, you will just select the `parking-ccc-iot-2026-vpc` and the `parking-ccc-iot-2026-subnet-private1` and `parking-ccc-iot-2026-subnet-private2`, and everything will work perfectly out of the box.
+
+---
+
+**5. Create Security Groups (The Virtual Firewalls)**
+*Navigate to the **VPC Console**, look at the left-hand menu under the "Security" section, and click on **Security Groups**.*
+
+**A. Create the "All Outbound" Security Group**
+*(This is for your Data Querying Lambda, which needs to reach out to the public internet to communicate with the LLM API).*
+
+* Click the orange **Create security group** button.
+* **Security group name:** `lambda-internet-sg`
+* **Description:** `Allows Lambdas to reach the internet via NAT Gateway`
+* **VPC:** Ensure you select your new `parking-ccc-iot-2026-vpc`.
+* **Inbound rules:** Leave this completely empty. (Lambdas don't need inbound rules to receive traffic from API Gateway or S3 triggers).
+* **Outbound rules:** AWS adds a default rule here that says **Type:** `All traffic`, **Destination:** `0.0.0.0/0`. Leave this exactly as it is! This allows the Lambda to send requests out to the web.
+* Click **Create security group**.
+
+**B. Create the "S3-Only" Security Group**
+*(This is for your Data Ingestion and Processing Lambdas, which strictly move data between SQS and S3 buckets and should never talk to the public internet).*
+
+* Click **Create security group** again.
+* **Security group name:** `lambda-s3-only-sg`
+* **Description:** `Restricts Lambda outbound traffic strictly to Amazon S3`
+* **VPC:** Select your `parking-ccc-iot-2026-vpc`.
+* **Inbound rules:** Leave empty.
+* **Outbound rules:** 
+    1. First, **Delete** the default `All traffic` -> `0.0.0.0/0` rule. (We are locking this down!).
+    2. Click **Add rule**.
+    3. **Type:** Select `HTTPS` (Port 443).
+    4. **Destination:** Click the search box and select **Prefix lists**. Find the option that looks like `pl-xxxxxxx (com.amazonaws.us-east-1.s3)`.
+* *Why this works:* This AWS Managed Prefix List automatically contains all the secure IP addresses for S3 in your region. Your Lambda can now talk to your Bronze and Gold buckets, but if a hacker ever compromised it, they couldn't exfiltrate data to the public internet!
+* Click **Create security group**.
 
 ---
 
@@ -68,7 +100,8 @@ When you attach your Lambdas to this VPC later, you will just select the `parkin
 
 * Navigate to the **SQS Console** -> **Create queue**.
 * **Type:** Standard.
-* **Name:** `iot-telemetry-queue`.
+* **Name:** `sqs-ccc-iot-2026`.
+* **Visibility timeout:** 2 minutes. 
 * Leave the rest as default and click **Create queue**.
 
 **2. Get the ARN**
@@ -122,6 +155,7 @@ When you attach your Lambdas to this VPC later, you will just select the `parkin
 
 * Select the `/` root, click **Create resource**.
 * **Resource Name:** `traffic` (This creates the `/traffic` path).
+* Enable **CORS**.
 * Select `/traffic`, click **Create method**.
 * **Method type:** `GET`.
 * **Integration type:** Lambda function.

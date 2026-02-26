@@ -53,7 +53,7 @@ First, we need to create the database container where the Crawler will put the t
 Once it finishes running, check to see what it built:
 
 1. On the left menu, under **Data Catalog**, click **Tables**.
-2. You should see a new table! Glue usually names the table after the S3 bucket (e.g., `gold_bucket_ccc_iot_2026`).
+2. You should see a new table! Glue usually names the table after the S3 bucket (e.g., `gold-bucket-ccc-iot-2026`).
 
 **Crucial detail for your Lambda script:** If Glue named your table `gold_bucket_ccc_iot_2026`, you just need to go back to your **Data Querying Lambda** script and change line 12 to match it exactly:
 `TABLE = "gold_bucket_ccc_iot_2026"`
