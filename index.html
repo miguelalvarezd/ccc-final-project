@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Smart Parking Assistant | Real-Time</title>
   <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     :root { 
         --primary: #00d1b2; 
@@ -42,6 +43,11 @@
     .msg { max-width: 82%; padding: 12px 16px; border-radius: 14px; font-size: 14px; line-height: 1.55; }
     .msg-user { align-self: flex-end; background: var(--primary); color: #003e35; font-weight: 600; border-bottom-right-radius: 3px; }
     .msg-ai { align-self: flex-start; background: rgba(255,255,255,0.07); border-bottom-left-radius: 3px; }
+    .msg-ai p { margin: 0 0 8px 0; }
+    .msg-ai p:last-child { margin-bottom: 0; }
+    .msg-ai ul, .msg-ai ol { margin: 4px 0; padding-left: 20px; }
+    .msg-ai strong { color: var(--primary); }
+    .msg-ai code { background: rgba(255,255,255,0.1); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
     .input-area { padding: 14px 16px; background: rgba(0,0,0,0.25); border-top: 1px solid rgba(255,255,255,0.08); }
     .input-group { display: flex; gap: 8px; }
     input { 
@@ -346,8 +352,11 @@
         }
         const url = new URL(API_URL);
         Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), params.mode === 'llm' ? 55000 : 30000);
         try {
-            const response = await fetch(url, { method: "GET", headers: { "Accept": "application/json" } });
+            const response = await fetch(url, { method: "GET", headers: { "Accept": "application/json" }, signal: controller.signal });
+            clearTimeout(timeoutId);
             if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
             const data = await response.json();
             return typeof data.body === 'string' ? JSON.parse(data.body) : data;
@@ -360,7 +369,7 @@
     async function updateMap() {
         loader.style.display = "block";
         try {
-            const data = await callApi({ mode: 'filters', limit: 20 });
+            const data = await callApi({ mode: 'filters', latest: 'true' });
             if (data.result && data.result.rows) {
                 renderParkingLot(data.result.rows);
             } else {
@@ -374,12 +383,8 @@
     }
 
     function renderParkingLot(rows) {
-        // Latest status per sensor
-        const latestMap = {};
-        rows.forEach(row => { if (!latestMap[row.sensor_id]) latestMap[row.sensor_id] = row; });
-        const sensors = Object.values(latestMap).sort((a, b) =>
-            a.sensor_id.localeCompare(b.sensor_id, undefined, { numeric: true, sensitivity: 'base' })
-        );
+        // Backend already returns one row per sensor, sorted by sensor_id
+        const sensors = rows;
 
         parkingLot.innerHTML = "";
         let free = 0, occupied = 0;
@@ -471,11 +476,12 @@
         try {
             const data = await callApi({ mode: 'llm', prompt: text });
             addMessage(data.output || "No tengo respuesta en este momento.");
-            if (data.result && data.result.rows) {
-                renderParkingLot(data.result.rows);
-            }
         } catch (e) {
-            addMessage("Error en la conexión con el asistente.", 'ai');
+            if (e.name === 'AbortError') {
+                addMessage("La consulta ha tardado demasiado. Intenta una pregunta más sencilla.", 'ai');
+            } else {
+                addMessage("Error en la conexión con el asistente.", 'ai');
+            }
         } finally {
             loader.style.display = "none";
         }
@@ -484,7 +490,11 @@
     function addMessage(msg, type = 'ai') {
         const div = document.createElement("div");
         div.className = `msg msg-${type}`;
-        div.textContent = msg;
+        if (type === 'ai') {
+            div.innerHTML = marked.parse(msg);
+        } else {
+            div.textContent = msg;
+        }
         chatWindow.appendChild(div);
         chatWindow.scrollTop = chatWindow.scrollHeight;
     }

@@ -27,6 +27,10 @@ You need to tell your code where to drop the transformed, enriched data.
 2. Click **Edit** and add a new variable:
 * **Key:** `GOLD_BUCKET_NAME`
 * **Value:** The exact name of your S3 Gold bucket (e.g., `gold-bucket-ccc-iot-2026`).
+* **Key:** `LOT_PHYSICAL_CAPACITY`
+* **Value:** The exact name of your S3 Gold bucket (e.g., `14`).
+* **Key:** `SPOTS_UNDER_REPAIR`
+* **Value:** The exact name of your S3 Gold bucket (e.g., `2`).
 
 
 3. Click **Save**.

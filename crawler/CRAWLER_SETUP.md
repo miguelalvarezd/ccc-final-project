@@ -1,6 +1,6 @@
 # CRAWLER SETUP
 
-A Crawler's job is to act like a scout. It will automatically read those nested `year=2026/month=02/day=23/` folders in your Gold bucket, figure out the schema (all your JSON fields like `event_date` and `lot_available_spaces`), and build a table for Athena to query.
+A Crawler's job is to act like a scout. It will automatically read those nested `year=2026/month=02/day=23/` folders in your Gold bucket, figure out the schema (all your JSON fields like `event_date` and `lot_usable_spaces`), and build a table for Athena to query.
 
 Looking back at the Athena Data Querying Lambda script you shared earlier, I noticed you set `DATABASE = "iot_data"` and `TABLE = "gold_data"`. We will set up the Glue Crawler to match those exact names so your script works perfectly!
 

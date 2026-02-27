@@ -38,28 +38,16 @@ def lambda_handler(event, context):
             year, month, day = dt_obj.strftime("%Y"), dt_obj.strftime("%m"), dt_obj.strftime("%d")
 
             # 3. Handle Capacity and Availability Logic
-            # NOTE: In reality, you would query your DynamoDB Metadata table here.
-            # For this script, we use a mock dictionary to represent what the DB returns:
-            simulated_db_data = {
-                "lot_physical_capacity": 50,
-                "spots_under_repair": 2, 
-                "currently_parked_cars": 38 
-            }
-            
-            # Calculate the true capacity
-            usable_capacity = simulated_db_data["lot_physical_capacity"] - simulated_db_data["spots_under_repair"]
-            
-            # Adjust the parked cars count based on this new event
-            is_occupied = raw_payload.get('is_occupied', False)
-            if is_occupied:
-                simulated_db_data["currently_parked_cars"] += 1
-            else:
-                simulated_db_data["currently_parked_cars"] -= 1
-                
-            # Calculate the final available spaces
-            available_spaces = usable_capacity - simulated_db_data["currently_parked_cars"]
+            # Lot-level configuration from environment variables
+            lot_physical_capacity = int(os.environ.get('LOT_PHYSICAL_CAPACITY', '14'))
+            spots_under_repair = int(os.environ.get('SPOTS_UNDER_REPAIR', '0'))
+
+            # Usable capacity = total physical spots minus those out of service
+            lot_usable_spaces = lot_physical_capacity - spots_under_repair
 
             # 4. Build the Enriched Gold Payload
+            is_occupied = raw_payload.get('is_occupied', False)
+
             gold_payload = {
                 "device_id": raw_payload.get("device_id"),
                 "sensor_id": raw_payload.get("sensor_id"),
@@ -67,9 +55,8 @@ def lambda_handler(event, context):
                 "event_timestamp": full_timestamp,
                 "event_date": date_part,
                 "event_time": time_part,
-                "lot_physical_capacity": simulated_db_data["lot_physical_capacity"],
-                "lot_usable_capacity": usable_capacity,
-                "lot_available_spaces": available_spaces,
+                "lot_physical_capacity": lot_physical_capacity,
+                "lot_usable_spaces": lot_usable_spaces,
                 "processed_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
             }
 

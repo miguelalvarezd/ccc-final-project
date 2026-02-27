@@ -60,7 +60,7 @@ def run_athena_query(query: str):
         state = status["QueryExecution"]["Status"]["State"]
         if state in ("SUCCEEDED", "FAILED", "CANCELLED"):
             break
-        time.sleep(1)
+        time.sleep(0.5)
         attempts += 1
 
     if state != "SUCCEEDED":
@@ -111,6 +111,26 @@ ORDER BY event_timestamp DESC
 LIMIT {limit}
 """.strip()
 
+def build_latest_status_query(device_id: str | None) -> str:
+    """Returns the latest status per sensor, ordered by sensor_id."""
+    outer_where = ["rn = 1"]
+
+    if device_id:
+        if not _SAFE_ID.match(device_id):
+            raise ValueError("Formato de device_id inválido")
+        outer_where.append(f"device_id = '{device_id}'")
+
+    where_clause = "WHERE " + " AND ".join(outer_where)
+
+    return f"""
+SELECT * FROM (
+    SELECT *, row_number() OVER (PARTITION BY sensor_id ORDER BY event_timestamp DESC) as rn
+    FROM {DATABASE}.{TABLE}
+)
+{where_clause}
+ORDER BY sensor_id ASC
+""".strip()
+
 # -----------------------------
 # Auxiliar para CORS
 # -----------------------------
@@ -144,6 +164,7 @@ def lambda_handler(event, context):
     if mode == "filters":
         device_id = params.get("device_id")
         date = params.get("date")
+        latest = params.get("latest", "false").lower() == "true"
         limit_raw = params.get("limit", "100")
 
         try:
@@ -153,7 +174,10 @@ def lambda_handler(event, context):
             return make_response(400, {"error": "El límite (limit) debe ser un número entero"})
 
         try:
-            query = build_filtered_query(device_id=device_id, date=date, limit=limit)
+            if latest:
+                query = build_latest_status_query(device_id=device_id)
+            else:
+                query = build_filtered_query(device_id=device_id, date=date, limit=limit)
             result = run_athena_query(query)
             return make_response(200, {
                 "mode": "filters", 
@@ -175,30 +199,54 @@ def lambda_handler(event, context):
         try:
             get_secret()
             
-            # PASO 1: Generar la Query SQL
+            # STEP 1: Generate the SQL Query
             sql_gen_prompt = f"""
-            Genera una consulta SQL para AWS Athena (Presto SQL).
-            Tabla: `{DATABASE}.{TABLE}`
-            Columnas:
-            - device_id (string): ID del dispositivo/parking o zona.
-            - sensor_id (string): ID del sensor específico o plaza.
-            - status (string): Estado (ej: 'OCCUPIED', 'FREE').
-            - event_timestamp (string): Marca de tiempo completa.
-            - event_date (string): Fecha del evento (YYYY-MM-DD).
-            - event_time (string): Hora del evento (HH:MM:SS).
-            - lot_available_spaces (int): Espacios libres totales en el lote.
-            - lot_physical_capacity (int): Capacidad total del lote.
-
-            Pregunta usuario: "{user_prompt}"
+            Generate a SQL query for AWS Athena (Presto SQL).
+            Table: `{DATABASE}.{TABLE}`
             
-            REGLAS: 
-            1. Devuelve SOLO el código SQL sin formato markdown ni texto adicional.
-            2. Si pide el estado actual de las plazas, usa EXACTAMENTE esta query base y añade los filtros necesarios: 
-               SELECT * FROM (SELECT *, row_number() OVER (PARTITION BY sensor_id ORDER BY event_timestamp DESC) as rn FROM {DATABASE}.{TABLE}) WHERE rn = 1
+            DATA MODEL:
+            - device_id (string): Identifier of the entire PARKING LOT (zone/lot).
+            - sensor_id (string): Identifier of an INDIVIDUAL PARKING SPOT within the lot.
+            - status (string): Current state of the individual spot ('OCCUPIED' or 'FREE').
+            - event_timestamp (string): Timestamp of the status change event.
+            - event_date (string): Date of the event (YYYY-MM-DD).
+            - event_time (string): Time of the event (HH:MM:SS).
+            - lot_usable_spaces (int): Total number of OPERATIONAL spots in the parking lot (excludes reserved/maintenance). This is a lot-level field, not per-spot.
+            - lot_physical_capacity (int): Total physical capacity of the parking lot (includes reserved/maintenance). This is a lot-level field, not per-spot.
+
+            IMPORTANT CONTEXT:
+            - The table stores status change EVENTS. Each row is a status change for a single spot.
+            - Spots do not change status at the same frequency: one spot may have many more records than another.
+            - To get the CURRENT state of each spot, you must keep only the most recent event per sensor_id.
+            - The number of operational spots in a lot equals lot_usable_spaces. The rest are out of service.
+            - CRITICAL: lot_physical_capacity and lot_usable_spaces are LOT-LEVEL CONSTANTS repeated identically on every row. NEVER use SUM/COUNT on them. To read their value, simply select them from any single row (e.g., SELECT lot_physical_capacity, lot_usable_spaces FROM table LIMIT 1).
+
+            EXAMPLES:
+            - "How many spots does the parking have?" → SELECT lot_physical_capacity, lot_usable_spaces FROM {DATABASE}.{TABLE} LIMIT 1
+            - "Which spots are free right now?" / "Where can I park?" → SELECT device_id, sensor_id, status, event_timestamp FROM (SELECT *, row_number() OVER (PARTITION BY sensor_id ORDER BY event_timestamp DESC) as rn FROM {DATABASE}.{TABLE}) WHERE rn = 1 AND status = 'FREE' ORDER BY sensor_id ASC
+            - "Which spots are occupied?" → SELECT device_id, sensor_id, status, event_timestamp FROM (SELECT *, row_number() OVER (PARTITION BY sensor_id ORDER BY event_timestamp DESC) as rn FROM {DATABASE}.{TABLE}) WHERE rn = 1 AND status = 'OCCUPIED' ORDER BY sensor_id ASC
+            - "How many cars are parked?" → SELECT COUNT(*) as parked_cars FROM (SELECT *, row_number() OVER (PARTITION BY sensor_id ORDER BY event_timestamp DESC) as rn FROM {DATABASE}.{TABLE}) WHERE rn = 1 AND status = 'OCCUPIED'
+            - "What is the status of all spots?" → SELECT device_id, sensor_id, status, event_timestamp FROM (SELECT *, row_number() OVER (PARTITION BY sensor_id ORDER BY event_timestamp DESC) as rn FROM {DATABASE}.{TABLE}) WHERE rn = 1 ORDER BY sensor_id ASC
+
+            User question: "{user_prompt}"
+            
+            RULES: 
+            1. Return ONLY the SQL code with no markdown formatting or additional text.
+            2. If the user asks for the current state of spots, use the row_number pattern shown in the examples.
+            3. Only include lot_physical_capacity or lot_usable_spaces in the SELECT if the user explicitly asks about capacity or total spots. Otherwise select only: device_id, sensor_id, status, event_timestamp.
+            4. If the user's question is NOT related to the parking system (spots, availability, capacity, status, parking), return ONLY the text: NOT_PARKING_RELATED
             """
             
             raw_sql_query = ask_llm(sql_gen_prompt)
             sql_query = raw_sql_query.replace("```sql", "").replace("```", "").strip()
+
+            # Check if the LLM flagged the question as off-topic
+            if "NOT_PARKING_RELATED" in sql_query.upper():
+                return make_response(200, {
+                    "output": "Lo siento, solo puedo ayudarte con preguntas sobre el parking: plazas libres, ocupadas, capacidad, etc. ¿En qué puedo ayudarte?",
+                    "sql": None,
+                    "result": {"columns": [], "rows": []}
+                })
             
             if "SELECT" not in sql_query.upper():
                  return make_response(400, {"error": "El LLM no pudo generar una query válida", "debug": sql_query})
@@ -206,18 +254,35 @@ def lambda_handler(event, context):
             # PASO 2: Ejecutar en Athena
             athena_results = run_athena_query(sql_query)
 
-            # PASO 3: Generar respuesta final (RAG)
+            # STEP 3: Generate final response (RAG)
             rag_prompt = f"""
-            Eres el asistente inteligente de un parking. 
-            El usuario ha preguntado: "{user_prompt}"
-            Los datos reales de los sensores en la base de datos son:
+            You are the intelligent assistant of an IoT-sensor-based parking system.
+            The user asked: "{user_prompt}"
+            
+            DATA MODEL:
+            - device_id = identifier of the entire PARKING LOT (zone/lot).
+            - sensor_id = identifier of an INDIVIDUAL PARKING SPOT within the lot.
+            - status = current state of that spot: 'OCCUPIED' or 'FREE'.
+            - lot_usable_spaces = total operational (usable) spots in the lot (excludes maintenance/reserved).
+            - lot_physical_capacity = total physical capacity of the lot (includes spots under maintenance).
+            - The data consists of status change events. If filtered with row_number, each row represents the most recent state of each spot.
+
+            Real sensor data:
             {json.dumps(athena_results['rows'])}
 
-            Instrucciones:
-            - Basándote EXCLUSIVAMENTE en estos datos, responde al usuario de forma natural y servicial.
-            - Si hay sitios libres, indica la zona y el ID de la plaza.
-            - Si no hay datos relevantes, dilo amablemente.
-            - No uses markdown ni menciones que estás leyendo una base de datos o JSON.
+            Instructions:
+            - The data above is COMPLETE and RELIABLE. It comes directly from real-time sensors. Trust it fully.
+            - CRITICAL: NEVER invent, fabricate, or assume data that is NOT present above. Only describe spots that explicitly appear in the data. If a spot is not in the data, do NOT mention it.
+            - NEVER say you don't have information or that data is missing. The data above IS the answer.
+            - Only answer what the user asked. If they ask where to park, ONLY list free spots. If they ask which are occupied, ONLY list occupied spots. Do NOT list both unless explicitly asked for the full status.
+            - If the query returned lot_physical_capacity and lot_usable_spaces, state those numbers confidently (e.g., "The parking has 14 total spots, of which 12 are currently usable").
+            - If the query returned individual spots, describe them clearly with their spot IDs.
+            - When listing spots, sort them in NUMERICAL ORDER (spot-01, spot-02, spot-03, ...).
+            - Only mention lot_physical_capacity or lot_usable_spaces if the user EXPLICITLY asks about capacity, total spots, or how many spots exist. If the user asks about free/occupied spots, parking availability, or where to park, do NOT mention capacity numbers even if they appear in the data.
+            - If the data is empty or does not seem to match the question, ask the user to rephrase or be more specific. Do NOT say "I don't know".
+            - Do NOT mention databases, JSON, queries, or sensors.
+            - You may use markdown formatting (bold, lists, etc.) to make the answer clearer.
+            - IMPORTANT: Reply in the SAME LANGUAGE as the user's question. Detect the language of the question and respond accordingly.
             """
             
             final_response = ask_llm(rag_prompt)

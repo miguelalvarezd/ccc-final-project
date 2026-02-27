@@ -31,7 +31,7 @@ LIMIT 10;
 ```
 
 2. Click the blue **Run** button.
-3. Scroll down to the **Results** section. You should see a beautiful table containing all your JSON fields (`device_id`, `status`, `event_date`, `lot_available_spaces`, etc.), cleanly organized into columns!
+3. Scroll down to the **Results** section. You should see a beautiful table containing all your JSON fields (`device_id`, `status`, `event_date`, `lot_usable_spaces`, etc.), cleanly organized into columns!
 
 ### Step 4: The "Real World" Business Query
 
@@ -40,7 +40,7 @@ To fulfill your project's goal of allowing parking operators to monetize real-ti
 Open a new query tab (the `+` icon) and run this:
 
 ```sql
-SELECT sensor_id, status, event_time, lot_available_spaces
+SELECT sensor_id, status, event_time, lot_usable_spaces
 FROM (
     SELECT *, 
            row_number() OVER (PARTITION BY sensor_id ORDER BY event_timestamp DESC) as row_num
