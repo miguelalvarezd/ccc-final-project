@@ -71,7 +71,19 @@ When you attach your Lambdas to this VPC later, you will just select the `parkin
 * *Why this works:* This AWS Managed Prefix List automatically contains all the secure IP addresses for S3 in your region. Your Lambda can now talk to your Bronze and Gold buckets, but if a hacker ever compromised it, they couldn't exfiltrate data to the public internet!
 * Click **Create security group**.
 
----
+**B. Create the "DynamoDB-Only" Security Group**
+
+* Click **Create security group** again.
+* **Security group name:** `lambda-dynamobd-only-sg`
+* **Description:** `Restricts Lambda outbound traffic strictly to DynamoDB`
+* **VPC:** Select your `parking-ccc-iot-2026-vpc`.
+* **Inbound rules:** Leave empty.
+* **Outbound rules:** 
+    1. First, **Delete** the default `All traffic` -> `0.0.0.0/0` rule.
+    2. Click **Add rule**.
+    3. **Type:** Select `HTTPS` (Port 443).
+    4. **Destination:** Click the search box and select **Prefix lists**. Find the option that looks like `pl-xxxxxxx (com.amazonaws.us-east-1.dynamodb)`.
+* Click **Create security group**.
 
 ## Phase 2: The Data Lake Storage (S3)
 
@@ -79,18 +91,45 @@ When you attach your Lambdas to this VPC later, you will just select the `parkin
 
 **1. Create the S3 Buckets**
 
-* Navigate to the **S3 Console** -> **Create bucket**. You need to create three buckets with globally unique names. Based on your code, create exactly these:
-* `raw-bucket-ccc-iot-2026` (The Bronze Bucket)
-* `gold-bucket-ccc-iot-2026` (The Gold Bucket)
-* `temporal-athena-ccc-iot-2026` (The Athena Results Bucket)
-
+* Navigate to the **S3 Console** -> **Create bucket**. You need to create three buckets with globally unique names. Create:
+    * `raw-bucket-ccc-iot-2026` (The Bronze Bucket)
+    * `gold-bucket-ccc-iot-2026` (The Gold Bucket)
+    * `temporal-athena-ccc-iot-2026` (The Athena Results Bucket)
 * *Note: Leave all buckets with "Block all public access" turned ON. Security first!*
 
 **2. Configure the Athena Results Folder**
 
 * Open `temporal-athena-ccc-iot-2026`, click **Create folder**, and name it `athena-results`.
 
----
+**3. Configure the Frontend Bucket**
+
+* Navigate to the **S3 Console** -> **Create bucket**.
+* Name it `frontend-ccc-iot-2026`.
+* **Uncheck** "Block all public access". You can check the options:
+    * Block public access granted through new ACLs (opcional)
+    * Block public access granted through any ACLs (opcional)
+* Acknowledge the warning
+* Click **Create Bucket**
+* Go to **Permissions** and add the following policy:
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "PublicReadGetObject",
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::frontend-ccc-iot-2026/*"
+        }
+    ]
+}
+```
+* Go to **Properties**, scroll to **Static website hosting**, click **Edit**, and configure:
+    * Static website hosting: **Enable**
+    * Hosting type: **Host a static website**
+    * Index document: `index.html`
+* Open `frontend-ccc-iot-2026`, go to **Objects**, click **Upload**, and upload `index.html`. Note that you should modify the API URL inside the file to the exact one of the API (*Phase 7*).
 
 ## Phase 3: The Decoupling Buffer (SQS)
 
@@ -107,8 +146,6 @@ When you attach your Lambdas to this VPC later, you will just select the `parkin
 **2. Get the ARN**
 
 * Once created, copy the **ARN** (Amazon Resource Name) from the queue details. You will need this for the IoT Rule.
-
----
 
 ## Phase 4: Edge Ingestion (AWS IoT Core)
 
@@ -138,8 +175,6 @@ When you attach your Lambdas to this VPC later, you will just select the `parkin
 * Choose your `iot-telemetry-queue`.
 * **IAM Role:** Create a new role (e.g., `IoTSQSAccessRole`) to give IoT Core permission to write to SQS.
 
----
-
 ## Phase 5: The Frontend Door (API Gateway)
 
 *This phase creates the HTTP endpoint that your React/HTML frontend will call to ask the LLM questions or get diagram data.*
@@ -151,7 +186,7 @@ When you attach your Lambdas to this VPC later, you will just select the `parkin
 * **API name:** `ParkingDataAPI`.
 * **Endpoint Type:** Regional.
 
-**2. Create the Resource and Method**
+**2. Create the `/traffic` Resource and Method**
 
 * Select the `/` root, click **Create resource**.
 * **Resource Name:** `traffic` (This creates the `/traffic` path).
@@ -167,26 +202,182 @@ When you attach your Lambdas to this VPC later, you will just select the `parkin
 * Select the `/traffic` resource, click **Enable CORS**.
 * Leave the defaults (Allow GET, OPTIONS) and click **Save**. (This ensures your browser doesn't block the API call when you build your frontend).
 
-**4. Deploy the API**
+**4. Create the `/traffic/state` Resource and Method**
+
+* Select the `/traffic` root, click **Create resource**.
+* **Resource Name:** `state` (This creates the `/traffic/state` path).
+* Enable **CORS**.
+* Select `/state`, click **Create method**.
+* **Method type:** `POST`.
+* **Integration type:** Lambda function.
+* **Lambda proxy integration:** Toggle this **ON**.
+* **Lambda function:** Select your Modify State Lambda.
+
+**5. Enable CORS (Cross-Origin Resource Sharing)**
+
+* Select the `/traffic/state` resource, click **Enable CORS**.
+* Leave the defaults (Allow GET, OPTIONS) and click **Save**. (This ensures your browser doesn't block the API call when you build your frontend).
+
+**6. Deploy the API**
 
 * Click **Deploy API**.
 * **Stage:** New stage.
 * **Stage name:** `prod`.
 * Click **Deploy**.
-* **Copy the Invoke URL!** It will look something like `https://abcdef123.execute-api.us-east-1.amazonaws.com/prod`.
+* **Copy the Invoke URL** It will look something like `https://abcdef123.execute-api.us-east-1.amazonaws.com/prod`.
 
----
+## Phase 6: DynamoDB Configuration
 
-## Phase 6: Lambda and Glue Configuration
+The `ParkingLotState` table uses a Single-Table Design to store both lot-level metadata (total capacity) and the real-time reservation state of individual parking spots.
+
+**Table Specifications:**
+
+* **Table Name:** `ParkingLotState`
+* **Partition Key:** `LotID` (Type: `String`)
+* **Sort Key:** `EntityID` (Type: `String`)
+* **Capacity Mode:** On-Demand (Pay-per-request, ideal for unpredictable IoT traffic)
+
+**Configuration**
+
+1. Navigate to the **DynamoDB** console and click **Create table**.
+2. Enter the Table Name and Keys exactly as specified above.
+3. Under **Table settings**, select **Customize settings**.
+4. In the **Read/write capacity settings**, change the mode to **On-Demand**.
+5. Click **Create table**.
+
+**Creating the VPC Gateway Endpoint**
+
+Because the backend Lambda functions reside in a Private Subnet, they require a VPC Gateway Endpoint to securely and freely route traffic to DynamoDB without crossing the public internet or incurring NAT Gateway data charges.
+
+1. Navigate to the **VPC** console and select **Endpoints** from the left sidebar.
+2. Click **Create endpoint**.
+3. **Name tag:** `parking-ccc-iot-2026-vpce-dynamodb`
+4. **Service category:** Select **AWS services**.
+5. **Services:** Search for `dynamodb` and select the service ending in `dynamodb` where the **Type** is **Gateway**.
+6. **VPC:** Select the `parking-ccc-iot-2026-vpc` VPC where your Lambda functions are deployed.
+7. **Route tables:** Check the boxes next to the route tables associated with your **Private Subnets**. *(AWS will automatically inject the local route to DynamoDB here).*
+8. **Policy:** Select **Full access**.
+9. Click **Create endpoint**.
+
+**Initializing Lot Metadata**
+
+For the data processing pipeline to correctly calculate available spaces, a `METADATA` item must be initialized in the table before the sensors go live.
+
+Run this CLI command to seed the initial capacity for `pi-zone-A` (assuming a 14-spot capacity with 0 spots currently under repair):
+
+```bash
+aws dynamodb put-item \
+    --table-name ParkingLotState \
+    --item '{
+        "LotID": {"S": "LOT#pi-zone-A"}, 
+        "EntityID": {"S": "METADATA"}, 
+        "TotalCapacity": {"N": "14"}, 
+        "SpotsUnderRepair": {"N": "2"}
+    }'
+
+```
+
+**Intilizing DataBase**
+
+Last, run this commands to initialize the spots in the DB.
+```bash
+aws dynamodb put-item \
+    --table-name ParkingLotState \
+    --item '{
+        "LotID": {"S": "LOT#pi-zone-A"}, 
+        "EntityID": {"S": "SPOT#spot-01"}, 
+        "ReservationState": {"S": "AVAILABLE"}
+    }'
+
+aws dynamodb put-item \
+    --table-name ParkingLotState \
+    --item '{
+        "LotID": {"S": "LOT#pi-zone-A"}, 
+        "EntityID": {"S": "SPOT#spot-02"}, 
+        "ReservationState": {"S": "BOOKED"}
+    }'
+
+aws dynamodb put-item \
+    --table-name ParkingLotState \
+    --item '{
+        "LotID": {"S": "LOT#pi-zone-A"}, 
+        "EntityID": {"S": "SPOT#spot-03"}, 
+        "ReservationState": {"S": "AVAILABLE"}
+    }'
+
+aws dynamodb put-item \
+    --table-name ParkingLotState \
+    --item '{
+        "LotID": {"S": "LOT#pi-zone-A"}, 
+        "EntityID": {"S": "SPOT#spot-04"}, 
+        "ReservationState": {"S": "AVAILABLE"}
+    }'
+
+aws dynamodb put-item \
+    --table-name ParkingLotState \
+    --item '{
+        "LotID": {"S": "LOT#pi-zone-A"}, 
+        "EntityID": {"S": "SPOT#spot-05"}, 
+        "ReservationState": {"S": "MAINTENANCE"}
+    }'
+
+aws dynamodb put-item \
+    --table-name ParkingLotState \
+    --item '{
+        "LotID": {"S": "LOT#pi-zone-A"}, 
+        "EntityID": {"S": "SPOT#spot-06"}, 
+        "ReservationState": {"S": "AVAILABLE"}
+    }'
+
+aws dynamodb put-item \
+    --table-name ParkingLotState \
+    --item '{
+        "LotID": {"S": "LOT#pi-zone-A"}, 
+        "EntityID": {"S": "SPOT#spot-07"}, 
+        "ReservationState": {"S": "AVAILABLE"}
+    }'
+
+aws dynamodb put-item \
+    --table-name ParkingLotState \
+    --item '{
+        "LotID": {"S": "LOT#pi-zone-A"}, 
+        "EntityID": {"S": "SPOT#spot-08"}, 
+        "ReservationState": {"S": "AVAILABLE"}
+    }'
+
+aws dynamodb put-item \
+    --table-name ParkingLotState \
+    --item '{
+        "LotID": {"S": "LOT#pi-zone-A"}, 
+        "EntityID": {"S": "SPOT#spot-09"}, 
+        "ReservationState": {"S": "AVAILABLE"}
+    }'
+
+aws dynamodb put-item \
+    --table-name ParkingLotState \
+    --item '{
+        "LotID": {"S": "LOT#pi-zone-A"}, 
+        "EntityID": {"S": "SPOT#spot-10"}, 
+        "ReservationState": {"S": "AVAILABLE"}
+    }'
+
+aws dynamodb put-item \
+    --table-name ParkingLotState \
+    --item '{
+        "LotID": {"S": "LOT#pi-zone-A"}, 
+        "EntityID": {"S": "SPOT#spot-11"}, 
+        "ReservationState": {"S": "AVAILABLE"}
+    }'
+
+aws dynamodb put-item \
+    --table-name ParkingLotState \
+    --item '{
+        "LotID": {"S": "LOT#pi-zone-A"}, 
+        "EntityID": {"S": "SPOT#spot-00"}, 
+        "ReservationState": {"S": "AVAILABLE"}
+    }'
+```
+
+## Phase 7: Lambda and Glue Configuration
 
 Last, configure the Lambda functions, Glue Crawler, and Athena following the steps in the corresponding folders.
-
-## You are officially fully deployed.
-
-With this document, you can trace a data point's entire lifecycle:
-
-1. The Pi detects a car and uses its certificates to publish to **IoT Core**.
-2. The **IoT Rule** catches it and pushes it to **SQS**.
-3. *[Your Ingestion Lambda]* reads SQS and drops it into the **Bronze S3 Bucket**.
-4. *[Your Processing Lambda]* gets triggered by the Bronze S3 Bucket, cleans it, calculates availability, and saves it to the **Gold S3 Bucket**.
-5. The **API Gateway** receives a user's web request, triggers the *[Data Querying Lambda]* (safely inside the **VPC**), which queries Athena (Gold Bucket) and Amazon Nova to return the answer!

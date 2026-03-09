@@ -1,0 +1,4 @@
+{
+  "httpMethod": "POST",
+  "body": "{\"sensor_id\": \"spot-02\", \"state\": \"AVAILABLE\"}"
+}

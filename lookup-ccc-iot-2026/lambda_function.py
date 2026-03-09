@@ -206,13 +206,16 @@ def lambda_handler(event, context):
             
             DATA MODEL:
             - device_id (string): Identifier of the entire PARKING LOT (zone/lot).
-            - sensor_id (string): Identifier of an INDIVIDUAL PARKING SPOT within the lot.
-            - status (string): Current state of the individual spot ('OCCUPIED' or 'FREE').
+            - sensor_id (string): Identifier of an INDIVIDUAL PARKING SPOT within the lot. Format is 'spot-XX'.
+            - status (string): Current state of the spot. Possible values: 'FREE', 'OCCUPIED', 'BOOKED_WAITING', 'OCCUPIED_BUT_BOOKED', 'MAINTENANCE', 'OCCUPIED_MAINTENANCE'.
+            - license_plate (string): The license plate of the vehicle that holds the reservation (if any).
+            - booked_until (string): The timestamp until which the spot is reserved.
+            - db_reservation_state (string): The backend reservation state ('AVAILABLE', 'BOOKED', 'MAINTENANCE').
             - event_timestamp (string): Timestamp of the status change event.
             - event_date (string): Date of the event (YYYY-MM-DD).
             - event_time (string): Time of the event (HH:MM:SS).
-            - lot_usable_spaces (int): Total number of OPERATIONAL spots in the parking lot (excludes reserved/maintenance). This is a lot-level field, not per-spot.
-            - lot_physical_capacity (int): Total physical capacity of the parking lot (includes reserved/maintenance). This is a lot-level field, not per-spot.
+            - lot_usable_spaces (int): Total number of OPERATIONAL spots.
+            - lot_physical_capacity (int): Total physical capacity of the lot.
 
             IMPORTANT CONTEXT:
             - The table stores status change EVENTS. Each row is a status change for a single spot.
@@ -223,17 +226,22 @@ def lambda_handler(event, context):
 
             EXAMPLES:
             - "How many spots does the parking have?" → SELECT lot_physical_capacity, lot_usable_spaces FROM {DATABASE}.{TABLE} LIMIT 1
-            - "Which spots are free right now?" / "Where can I park?" → SELECT device_id, sensor_id, status, event_timestamp FROM (SELECT *, row_number() OVER (PARTITION BY sensor_id ORDER BY event_timestamp DESC) as rn FROM {DATABASE}.{TABLE}) WHERE rn = 1 AND status = 'FREE' ORDER BY sensor_id ASC
-            - "Which spots are occupied?" → SELECT device_id, sensor_id, status, event_timestamp FROM (SELECT *, row_number() OVER (PARTITION BY sensor_id ORDER BY event_timestamp DESC) as rn FROM {DATABASE}.{TABLE}) WHERE rn = 1 AND status = 'OCCUPIED' ORDER BY sensor_id ASC
+            - "Which spots are free right now?" / "Where can I park?" → SELECT device_id, sensor_id, status, event_time, event_timestamp FROM (SELECT *, row_number() OVER (PARTITION BY sensor_id ORDER BY event_timestamp DESC) as rn FROM {DATABASE}.{TABLE}) WHERE rn = 1 AND status = 'FREE' ORDER BY sensor_id ASC
+            - "Which spots are occupied?" → SELECT device_id, sensor_id, status, event_time, event_timestamp FROM (SELECT *, row_number() OVER (PARTITION BY sensor_id ORDER BY event_timestamp DESC) as rn FROM {DATABASE}.{TABLE}) WHERE rn = 1 AND status = 'OCCUPIED' ORDER BY sensor_id ASC
             - "How many cars are parked?" → SELECT COUNT(*) as parked_cars FROM (SELECT *, row_number() OVER (PARTITION BY sensor_id ORDER BY event_timestamp DESC) as rn FROM {DATABASE}.{TABLE}) WHERE rn = 1 AND status = 'OCCUPIED'
-            - "What is the status of all spots?" → SELECT device_id, sensor_id, status, event_timestamp FROM (SELECT *, row_number() OVER (PARTITION BY sensor_id ORDER BY event_timestamp DESC) as rn FROM {DATABASE}.{TABLE}) WHERE rn = 1 ORDER BY sensor_id ASC
+            - "What is the status of all spots?" → SELECT device_id, sensor_id, status, event_time, event_timestamp FROM (SELECT *, row_number() OVER (PARTITION BY sensor_id ORDER BY event_timestamp DESC) as rn FROM {DATABASE}.{TABLE}) WHERE rn = 1 ORDER BY sensor_id ASC
+            - "When did spot-01 become free?" / "At what time did spot X change?" → SELECT sensor_id, status, event_time, event_date, event_timestamp FROM {DATABASE}.{TABLE} WHERE sensor_id = 'spot-01' ORDER BY event_timestamp DESC LIMIT 10  (fetch recent events and let the answer identify the relevant status change)
+            - "Show me the history of spot-05" → SELECT sensor_id, status, event_time, event_date, event_timestamp FROM {DATABASE}.{TABLE} WHERE sensor_id = 'spot-05' ORDER BY event_timestamp DESC LIMIT 20
+            - "Are there any parking violations?" / "Is anyone parked in the wrong spot?" → SELECT sensor_id, status, license_plate, event_timestamp FROM (SELECT *, row_number() OVER (PARTITION BY sensor_id ORDER BY event_timestamp DESC) as rn FROM {DATABASE}.{TABLE}) WHERE rn = 1 AND status IN ('OCCUPIED_BUT_BOOKED', 'OCCUPIED_MAINTENANCE') ORDER BY sensor_id ASC
+            - "Who booked spot 2?" / "What is the license plate for spot-02?" → SELECT sensor_id, license_plate, booked_until, status FROM (SELECT *, row_number() OVER (PARTITION BY sensor_id ORDER BY event_timestamp DESC) as rn FROM {DATABASE}.{TABLE}) WHERE rn = 1 AND sensor_id = 'spot-02'
+            - "Which spots are reserved but currently empty?" → SELECT sensor_id, license_plate, booked_until FROM (SELECT *, row_number() OVER (PARTITION BY sensor_id ORDER BY event_timestamp DESC) as rn FROM {DATABASE}.{TABLE}) WHERE rn = 1 AND status = 'BOOKED_WAITING' ORDER BY sensor_id ASC
 
             User question: "{user_prompt}"
             
             RULES: 
             1. Return ONLY the SQL code with no markdown formatting or additional text.
             2. If the user asks for the current state of spots, use the row_number pattern shown in the examples.
-            3. Only include lot_physical_capacity or lot_usable_spaces in the SELECT if the user explicitly asks about capacity or total spots. Otherwise select only: device_id, sensor_id, status, event_timestamp.
+            3. Only include lot_physical_capacity or lot_usable_spaces in the SELECT if the user explicitly asks about capacity or total spots. Otherwise select only relevant columns like: device_id, sensor_id, status, event_time, event_timestamp, event_date.
             4. If the user's question is NOT related to the parking system (spots, availability, capacity, status, parking), return ONLY the text: NOT_PARKING_RELATED
             """
             
@@ -265,6 +273,8 @@ def lambda_handler(event, context):
             - status = current state of that spot: 'OCCUPIED' or 'FREE'.
             - lot_usable_spaces = total operational (usable) spots in the lot (excludes maintenance/reserved).
             - lot_physical_capacity = total physical capacity of the lot (includes spots under maintenance).
+            - license_plate = the license plate of the car that booked the spot.
+            - booked_until = when the reservation expires.
             - The data consists of status change events. If filtered with row_number, each row represents the most recent state of each spot.
 
             Real sensor data:
@@ -273,6 +283,9 @@ def lambda_handler(event, context):
             Instructions:
             - The data above is COMPLETE and RELIABLE. It comes directly from real-time sensors. Trust it fully.
             - CRITICAL: NEVER invent, fabricate, or assume data that is NOT present above. Only describe spots that explicitly appear in the data. If a spot is not in the data, do NOT mention it.
+            - If a spot status is 'OCCUPIED_BUT_BOOKED', explain this is a VIOLATION (someone parked in a reserved spot). Mention the expected license plate if available.
+            - If a spot is 'BOOKED_WAITING', explain that it is currently empty but reserved for a specific license plate.
+            - If a spot is 'MAINTENANCE' or 'OCCUPIED_MAINTENANCE', mention that it is out of order.
             - NEVER say you don't have information or that data is missing. The data above IS the answer.
             - Only answer what the user asked. If they ask where to park, ONLY list free spots. If they ask which are occupied, ONLY list occupied spots. Do NOT list both unless explicitly asked for the full status.
             - If the query returned lot_physical_capacity and lot_usable_spaces, state those numbers confidently (e.g., "The parking has 14 total spots, of which 12 are currently usable").

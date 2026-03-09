@@ -2,7 +2,7 @@
 
 Before we can type our first SQL command, there is one notorious "AWS Gotcha" we have to handle: **Athena will refuse to run any queries until you tell it where to save the results.** Looking back at the Lambda script you shared earlier, you already created a bucket for this: `s3://temporal-athena-ccc-iot-2026/athena-results/`. Let's configure Athena to use it.
 
-### Step 1: Set Up the Query Results Location
+## Step 1: Set Up the Query Results Location
 
 1. Open the **Athena Console** in AWS.
 2. Click on **Query editor** on the left-hand menu.
@@ -11,14 +11,14 @@ Before we can type our first SQL command, there is one notorious "AWS Gotcha" we
 `s3://temporal-athena-ccc-iot-2026/athena-results/`
 5. Click **Save**.
 
-### Step 2: Select Your Database
+## Step 2: Select Your Database
 
 1. Go back to the **Editor** tab.
 2. On the left side, under the **Data** panel, find the **Database** dropdown.
 3. Select **`iot_data`** (the database your Glue Crawler just built).
 4. Under the **Tables** section below it, you should see the table the Crawler generated (e.g., `gold_bucket...`).
 
-### Step 3: Run Your First Test Query
+## Step 3: Run Your First Test Query
 
 Let's make sure everything is connected properly and the data is readable for your historical logs.
 
@@ -33,7 +33,7 @@ LIMIT 10;
 2. Click the blue **Run** button.
 3. Scroll down to the **Results** section. You should see a beautiful table containing all your JSON fields (`device_id`, `status`, `event_date`, `lot_usable_spaces`, etc.), cleanly organized into columns!
 
-### Step 4: The "Real World" Business Query
+## Step 4: The "Real World" Business Query
 
 To fulfill your project's goal of allowing parking operators to monetize real-time availability, let's run the query we discussed earlier that finds the *exact current status* of every spot in the lot right now.
 

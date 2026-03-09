@@ -1,0 +1,4 @@
+{
+  "httpMethod": "POST",
+  "body": "{\"sensor_id\": \"spot-02\", \"state\": \"BOOKED\", \"license_plate\": \"7110JFR\", \"booked_until\": \"2026-02-28T10:00:00Z\"}"
+}

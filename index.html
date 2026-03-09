@@ -17,6 +17,8 @@
         --lane: #1a2230;
         --text: #e7eaf3;
         --muted: #4a5568;
+        --booked: #3273dc;     /* Blue - BOOKED */
+        --maintenance: #ffdd57; /* Orange - MAINTENANCE */
     }
 
     * { box-sizing: border-box; }
@@ -183,6 +185,14 @@
         background: rgba(255, 56, 96, 0.04);
     }
 
+    /* Clases de estado para los spots */
+    .spot.free { border-color: var(--primary); background: rgba(0, 209, 178, 0.1); }
+    .spot.booked { border-color: var(--booked); background: rgba(50, 115, 220, 0.1); }
+    .spot.maintenance { border-color: var(--maintenance); background: rgba(255, 221, 87, 0.1); }
+    .spot.occupied-red { border-color: var(--danger); background: rgba(255, 56, 96, 0.1); }
+
+    
+
     /* Car silhouette inside occupied spot */
     .car-icon {
         position: absolute;
@@ -204,8 +214,12 @@
         z-index: 1; letter-spacing: 0.5px; 
         flex-shrink: 0;
     }
+
+    /* Ajuste de etiquetas de color */
     .spot.free .spot-label { color: var(--primary); }
-    .spot.occupied .spot-label { color: var(--danger); }
+    .spot.booked .spot-label { color: #8cb4ff; }
+    .spot.maintenance .spot-label { color: var(--maintenance); }
+    .spot.occupied-red .spot-label { color: var(--danger); }
 
     .spot-time { 
         font-size: 9px; color: rgba(255,255,255,0.3); 
@@ -240,6 +254,53 @@
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+    /* New Booking UI styles */
+    .spot-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 15px;
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 12px;
+        margin-top: 10px;
+    }
+    .booking-form {
+        display: none; /* Hidden by default */
+        position: absolute;
+        bottom: 80px;
+        right: 20px;
+        width: 320px;
+        background: var(--card-bg);
+        border: 1px solid var(--primary);
+        border-radius: 15px;
+        padding: 20px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        z-index: 100;
+    }
+    .booking-form.active { display: block; }
+    .booking-form h4 { margin: 0 0 15px 0; font-family: 'Rajdhani', sans-serif; color: var(--primary); }
+    .booking-form input, .booking-form select { width: 100%; margin-bottom: 10px; }
+    .btn-book {
+        background: var(--primary);
+        color: #003e35;
+        border: none;
+        padding: 10px;
+        width: 100%;
+        border-radius: 8px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .btn-cancel {
+        background: transparent;
+        color: var(--danger);
+        border: 1px solid var(--danger);
+        margin-top: 5px;
+        padding: 5px;
+        width: 100%;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 11px;
+    }
   </style>
 </head>
 <body>
@@ -269,9 +330,11 @@
     <div class="map-section">
         <div class="map-header">
             <h3>Planta 0 · Vista de Plazas</h3>
-            <div class="legend">
+            <div class="legend" style="flex-wrap: wrap; gap: 8px;">
                 <div class="legend-item"><div class="legend-dot" style="background:var(--primary)"></div> Libre</div>
                 <div class="legend-item"><div class="legend-dot" style="background:var(--danger)"></div> Ocupado</div>
+                <div class="legend-item"><div class="legend-dot" style="background:var(--booked)"></div> Reservado</div>
+                <div class="legend-item"><div class="legend-dot" style="background:var(--maintenance)"></div> Mantenimiento</div>
             </div>
         </div>
 
@@ -293,6 +356,23 @@
         </div>
 
         <button class="btn-refresh" onclick="updateMap()">↺ &nbsp;REFRESCAR MAPA</button>
+        <div id="bookingForm" class="booking-form">
+            <h4 id="formTitle">Modificar Plaza</h4>
+            <input type="text" id="targetSpotId" readonly style="opacity:0.6">
+            <select id="newState">
+                <option value="AVAILABLE">Disponible (FREE)</option>
+                <option value="BOOKED">Reservar (BOOKED)</option>
+                <option value="MAINTENANCE">Mantenimiento</option>
+            </select>
+            <input type="text" id="licensePlate" placeholder="Matrícula (Ej: 7110JFR)">
+            <input type="datetime-local" id="bookedUntil">
+            <button class="btn-book" onclick="submitStateChange()">Actualizar Estado</button>
+            <button class="btn-cancel" onclick="toggleForm()">Cerrar</button>
+        </div>
+
+        <button class="btn-refresh" style="background: var(--primary-dim); border-color: var(--primary);" onclick="toggleForm()">
+            ✎ MODIFICAR ESTADO PLAZA
+        </button>
     </div>
 </div>
 
@@ -416,14 +496,35 @@
 
             // Build spots helper
             function buildSpot(sensor) {
-                const isFree = sensor.status.toLowerCase() === 'free' || sensor.status === '1';
-                if (isFree) free++; else occupied++;
-                const spotEl = document.createElement("div");
-                spotEl.className = `spot ${isFree ? 'free' : 'occupied'}`;
+                const status = sensor.status; // Este es el final_status calculado por tu Lambda
+                
+                // 1. Determinar visibilidad del coche (Solo si está ocupado)
+                const hasCar = ["OCCUPIED", "OCCUPIED_BUT_BOOKED", "OCCUPIED_MAINTENANCE"].includes(status);
+                
+                // 2. Determinar clase de color
+                let statusClass = "";
+                if (status === "FREE") {
+                    statusClass = "free";
+                } else if (["BOOKED_WAITING", "OCCUPIED_BUT_BOOKED"].includes(status)) {
+                    statusClass = "booked";
+                } else if (["MAINTENANCE", "OCCUPIED_MAINTENANCE"].includes(status)) {
+                    statusClass = "maintenance";
+                } else if (status === "OCCUPIED") {
+                    statusClass = "occupied-red";
+                }
 
+                // Actualizar contadores globales (opcional)
+                if (hasCar) occupied++; else free++;
+
+                const spotEl = document.createElement("div");
+                spotEl.className = `spot ${statusClass}`;
+
+                // Icono del coche (Se renderiza pero el CSS controla la opacidad)
                 const carEl = document.createElement("div");
                 carEl.className = "car-icon";
-                carEl.innerHTML = carSVG("rgba(255,56,96,0.8)");
+                // Si no tiene coche, forzamos opacidad 0
+                carEl.style.opacity = hasCar ? "1" : "0";
+                carEl.innerHTML = carSVG(statusClass === 'booked' ? 'var(--booked)' : 'var(--danger)');
 
                 const label = document.createElement("span");
                 label.className = "spot-label";
@@ -435,11 +536,15 @@
 
                 spotEl.appendChild(carEl);
                 spotEl.appendChild(label);
-                spotEl.appendChild(time);
-                spotEl.title = `${sensor.sensor_id} · ${isFree ? 'LIBRE' : 'OCUPADO'}${sensor.event_time ? ' · ' + sensor.event_time : ''}`;
+                // spotEl.appendChild(time);
+                
+                // Hacer que la plaza sea seleccionable para el formulario de modificación
+                if (typeof enhanceSpotSelection === 'function') {
+                    enhanceSpotSelection(spotEl, sensor.sensor_id);
+                }
+
                 return spotEl;
             }
-
             left.forEach(s => leftCol.appendChild(buildSpot(s)));
             right.forEach(s => rightCol.appendChild(buildSpot(s)));
 
@@ -512,6 +617,71 @@
             document.getElementById("apiStatus").style.color = "var(--primary)";
         }
     };
+
+    const STATE_API_URL = "https://pmv073dn7k.execute-api.us-east-1.amazonaws.com/prod/traffic/state";
+
+    function toggleForm() {
+        const form = document.getElementById('bookingForm');
+        form.classList.toggle('active');
+        // Default values
+        if(form.classList.contains('active')) {
+            document.getElementById('targetSpotId').placeholder = "ID de Plaza (ej: spot-01)";
+            document.getElementById('targetSpotId').readOnly = false; // Let user type if not clicked from map
+        }
+    }
+
+    async function submitStateChange() {
+        const spotId = document.getElementById('targetSpotId').value || document.getElementById('targetSpotId').placeholder;
+        const state = document.getElementById('newState').value;
+        const plate = document.getElementById('licensePlate').value;
+        const until = document.getElementById('bookedUntil').value;
+
+        if (!spotId) {
+            alert("Por favor, introduce un ID de plaza");
+            return;
+        }
+
+        loader.style.display = "block";
+        
+        const payload = {
+            sensor_id: spotId,
+            state: state,
+            license_plate: plate,
+            booked_until: until ? new Date(until).toISOString().replace('.000', '') : null
+        };
+
+        try {
+            const response = await fetch(STATE_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error("Error en la respuesta de la API");
+
+            const result = await response.json();
+            const data = typeof result.body === 'string' ? JSON.parse(result.body) : result;
+
+            addMessage(`✅ Estado de **${spotId}** actualizado a **${state}** correctamente.`);
+            toggleForm();
+        } catch (err) {
+            console.error(err);
+            addMessage("❌ Error al intentar modificar el estado. Revisa la consola.", 'ai');
+        } finally {
+            loader.style.display = "none";
+        }
+    }
+
+    // Enhance renderParkingLot to allow clicking on a spot to select it
+    function enhanceSpotSelection(spotEl, sensorId) {
+        spotEl.style.cursor = "pointer";
+        spotEl.onclick = () => {
+            const form = document.getElementById('bookingForm');
+            form.classList.add('active');
+            document.getElementById('targetSpotId').value = sensorId;
+            document.getElementById('formTitle').textContent = `Modificar ${sensorId}`;
+        };
+    }
 </script>
 
 </body>
