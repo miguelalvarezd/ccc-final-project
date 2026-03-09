@@ -18,7 +18,30 @@ Before we can type our first SQL command, there is one notorious "AWS Gotcha" we
 3. Select **`iot_data`** (the database your Glue Crawler just built).
 4. Under the **Tables** section below it, you should see the table the Crawler generated (e.g., `gold_bucket...`).
 
-## Step 3: Run Your First Test Query
+## Step 3: Update Partitions
+
+You need to update the table to recognize partitions without running the crawler every time.
+
+```sql
+ALTER TABLE iot_data.gold_bucket_ccc_iot_2026 SET TBLPROPERTIES (
+  'projection.enabled' = 'true',
+  
+  'projection.year.type' = 'integer',
+  'projection.year.range' = '2025,2030', 
+  
+  'projection.month.type' = 'integer',
+  'projection.month.range' = '01,12',
+  'projection.month.digits' = '2',
+  
+  'projection.day.type' = 'integer',
+  'projection.day.range' = '01,31',
+  'projection.day.digits' = '2',
+  
+  'storage.location.template' = 's3://gold-bucket-ccc-iot-2026/year=${year}/month=${month}/day=${day}/'
+);
+```
+
+## Step 4: Run Your First Test Query
 
 Let's make sure everything is connected properly and the data is readable for your historical logs.
 
@@ -33,21 +56,19 @@ LIMIT 10;
 2. Click the blue **Run** button.
 3. Scroll down to the **Results** section. You should see a beautiful table containing all your JSON fields (`device_id`, `status`, `event_date`, `lot_usable_spaces`, etc.), cleanly organized into columns!
 
-## Step 4: The "Real World" Business Query
+## Step 5: The "Real World" Business Query
 
 To fulfill your project's goal of allowing parking operators to monetize real-time availability, let's run the query we discussed earlier that finds the *exact current status* of every spot in the lot right now.
 
 Open a new query tab (the `+` icon) and run this:
 
 ```sql
-SELECT sensor_id, status, event_time, lot_usable_spaces
-FROM (
-    SELECT *, 
-           row_number() OVER (PARTITION BY sensor_id ORDER BY event_timestamp DESC) as row_num
-    FROM "iot_data"."your_table_name"
+SELECT * FROM (
+    SELECT *, row_number() OVER (PARTITION BY sensor_id ORDER BY event_timestamp DESC) as rn
+    FROM iot_data.gold_bucket_ccc_iot_2026
 )
-WHERE row_num = 1
-ORDER BY sensor_id;
+WHERE rn = 1
+ORDER BY sensor_id ASC
 
 ```
 
